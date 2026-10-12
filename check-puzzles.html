@@ -1,0 +1,323 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CATDLE Puzzle Checker</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 750px;
+      margin: 30px auto;
+      padding: 0 16px;
+      background: #faf8f0;
+      color: #333;
+    }
+
+    button {
+      padding: 10px 14px;
+      margin: 6px 4px 6px 0;
+      background: #dc93aa;
+      color: white;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 280px;
+      box-sizing: border-box;
+      font-family: monospace;
+    }
+
+    .word {
+      padding: 6px 0;
+      border-bottom: 1px solid #eadde2;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🐱 CATDLE Puzzle Checker</h1>
+
+  <p>Find words that can reach CATS, then generate a mix of daily puzzles.</p>
+
+  <button id="find-button">Find solvable words</button>
+  <button id="generate-button" disabled>Generate 30 daily puzzles</button>
+
+  <p id="status">Click "Find solvable words" to begin.</p>
+  <div id="results"></div>
+
+  <h2>Generated daily-words.json</h2>
+  <p>Copy the generated JSON into your daily-words.json file.</p>
+  <textarea id="output" spellcheck="false"></textarea>
+  <button id="copy-button">Copy JSON</button>
+
+  <script>
+    const TARGET = "CATS";
+
+    const findButton = document.getElementById("find-button");
+    const generateButton = document.getElementById("generate-button");
+    const copyButton = document.getElementById("copy-button");
+    const status = document.getElementById("status");
+    const results = document.getElementById("results");
+    const output = document.getElementById("output");
+
+    let candidates = [];
+    let schedule = {};
+
+    function dateKey(date) {
+      return date.getFullYear() + "-" +
+        String(date.getMonth() + 1).padStart(2, "0") + "-" +
+        String(date.getDate()).padStart(2, "0");
+    }
+
+    function addDays(date, amount) {
+      const result = new Date(date);
+      result.setDate(result.getDate() + amount);
+      return result;
+    }
+
+    function getDifficulty(moves) {
+      if (moves <= 5) return "Easy";
+      if (moves <= 7) return "Medium";
+      return "Hard";
+    }
+
+    findButton.addEventListener("click", async () => {
+      findButton.disabled = true;
+      generateButton.disabled = true;
+      status.textContent = "Loading dictionary and checking words...";
+      results.replaceChildren();
+      candidates = [];
+
+      try {
+        const [dictionaryResponse, scheduleResponse] =
+          await Promise.all([
+            fetch("words_alpha.txt"),
+            fetch("daily-words.json")
+          ]);
+
+        if (!dictionaryResponse.ok) {
+          throw new Error("Could not load words_alpha.txt.");
+        }
+
+        if (!scheduleResponse.ok) {
+          throw new Error("Could not load daily-words.json.");
+        }
+
+        const dictionaryText = await dictionaryResponse.text();
+        schedule = await scheduleResponse.json();
+
+        const orderedWords = dictionaryText
+          .split(/\r?\n/)
+          .map(word => word.trim().toUpperCase())
+          .filter(word => /^[A-Z]{4}$/.test(word));
+
+        const words = new Set(orderedWords);
+        words.add(TARGET);
+
+        if (!words.has(TARGET)) {
+          throw new Error("The target word is missing.");
+        }
+
+        // Search outward from CATS to find shortest paths.
+        const distance = new Map([[TARGET, 0]]);
+        const queue = [TARGET];
+        let head = 0;
+
+        while (head < queue.length) {
+          const current = queue[head++];
+
+          for (let i = 0; i < 4; i++) {
+            for (let code = 65; code <= 90; code++) {
+              const letter = String.fromCharCode(code);
+
+              if (letter === current[i]) continue;
+
+              const next =
+                current.slice(0, i) + letter + current.slice(i + 1);
+
+              if (words.has(next) && !distance.has(next)) {
+                distance.set(next, distance.get(current) + 1);
+                queue.push(next);
+              }
+            }
+          }
+        }
+
+        const seen = new Set();
+
+        for (const word of orderedWords) {
+          const moves = distance.get(word);
+
+          if (
+            moves !== undefined &&
+            moves >= 4 &&
+            !seen.has(word)
+          ) {
+            seen.add(word);
+            candidates.push({
+              word,
+              moves,
+              difficulty: getDifficulty(moves)
+            });
+          }
+        }
+
+        // Shuffle the candidates so daily puzzles aren't alphabetical.
+for (let i = candidates.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+
+  [candidates[i], candidates[j]] =
+    [candidates[j], candidates[i]];
+}
+
+        const counts = {
+          Easy: candidates.filter(c => c.difficulty === "Easy").length,
+          Medium: candidates.filter(c => c.difficulty === "Medium").length,
+          Hard: candidates.filter(c => c.difficulty === "Hard").length
+        };
+
+        status.textContent =
+          `Found ${candidates.length} solvable starting words. ` +
+          `Easy: ${counts.Easy}, Medium: ${counts.Medium}, Hard: ${counts.Hard}.`;
+
+        for (const candidate of candidates.slice(0, 100)) {
+          const item = document.createElement("p");
+          item.className = "word";
+          item.textContent =
+            `${candidate.word} — ${candidate.moves} moves — ${candidate.difficulty}`;
+          results.appendChild(item);
+        }
+
+        if (candidates.length > 100) {
+          const note = document.createElement("p");
+          note.textContent =
+            `Showing the first 100 of ${candidates.length} candidates.`;
+          results.appendChild(note);
+        }
+
+        generateButton.disabled = candidates.length === 0;
+
+      } catch (error) {
+        status.textContent = "Error: " + error.message;
+      } finally {
+        findButton.disabled = false;
+      }
+    });
+
+    generateButton.addEventListener("click", () => {
+      if (candidates.length === 0) return;
+
+      const updatedSchedule = { ...schedule };
+      const usedWords = new Set(
+        Object.values(updatedSchedule).map(word =>
+          String(word).trim().toUpperCase()
+        )
+      );
+
+      // Spread difficulty levels across the month.
+     // Randomize the difficulty for each new puzzle.
+const difficultyOrder = [];
+
+for (let i = 0; i < 30; i++) {
+  difficultyOrder.push(
+    ["Easy", "Medium", "Hard"][
+      Math.floor(Math.random() * 3)
+    ]
+  );
+}
+
+// Shuffle the order too.
+for (let i = difficultyOrder.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+
+  [difficultyOrder[i], difficultyOrder[j]] =
+    [difficultyOrder[j], difficultyOrder[i]];
+}
+
+      const pools = {
+        Easy: candidates.filter(c => c.difficulty === "Easy"),
+        Medium: candidates.filter(c => c.difficulty === "Medium"),
+        Hard: candidates.filter(c => c.difficulty === "Hard")
+      };
+
+      const poolPositions = { Easy: 0, Medium: 0, Hard: 0 };
+
+      function nextWord(level) {
+        const pool = pools[level];
+
+        while (poolPositions[level] < pool.length) {
+          const candidate = pool[poolPositions[level]++];
+
+          if (!usedWords.has(candidate.word)) {
+            usedWords.add(candidate.word);
+            return candidate.word;
+          }
+        }
+
+        return null;
+      }
+
+      let added = 0;
+      const today = new Date();
+
+      for (let offset = 0; offset < 365 && added < 30; offset++) {
+        const date = dateKey(addDays(today, offset));
+
+        if (updatedSchedule[date]) continue;
+
+        const level = difficultyOrder[added % difficultyOrder.length];
+        let word = nextWord(level);
+
+        // If a difficulty group runs out, try the other groups.
+        if (!word) {
+          for (const fallback of ["Easy", "Medium", "Hard"]) {
+            word = nextWord(fallback);
+            if (word) break;
+          }
+        }
+
+        if (!word) break;
+
+        updatedSchedule[date] = word;
+        added++;
+      }
+
+      schedule = updatedSchedule;
+      output.value = JSON.stringify(updatedSchedule, null, 2);
+
+      status.textContent =
+        `Added ${added} new puzzles with mixed difficulty. ` +
+        "Existing scheduled dates were preserved.";
+
+      if (added < 30) {
+        status.textContent +=
+          " There were not enough unused candidates to fill 30 dates.";
+      }
+    });
+
+    copyButton.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(output.value);
+        status.textContent =
+          "JSON copied! Paste it into daily-words.json and save.";
+      } catch {
+        output.focus();
+        output.select();
+        status.textContent =
+          "Press ⌘ + C to copy the selected JSON.";
+      }
+    });
+  </script>
+</body>
+</html>

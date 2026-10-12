@@ -1,0 +1,61 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>catdle 🐱</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <h1 class="site-title">
+    <img src="meowdle-cat.png" alt="" class="title-cat">
+    CATDLE
+  </h1>
+
+  <p id="day-number" class="day-number">#1</p>
+  <hr class="header-line">
+
+  <h2>today's starting word</h2>
+  <div id="word-ladder" class="word-ladder"></div>
+
+  <div id="guess-row" class="guess-row">
+    <input class="guess-letter" maxlength="1" aria-label="letter 1">
+    <input class="guess-letter" maxlength="1" aria-label="letter 2">
+    <input class="guess-letter" maxlength="1" aria-label="letter 3">
+    <input class="guess-letter" maxlength="1" aria-label="letter 4">
+  </div>
+
+  <p id="message">your first move starts here!</p>
+  <p>moves: <span id="moves">0</span></p>
+
+  <hr>
+
+  <button id="yesterday-button" type="button">
+    see yesterday's results
+  </button>
+
+  <div id="popup-overlay" hidden></div>
+
+  <section id="yesterday-results" role="dialog"
+           aria-modal="true" aria-labelledby="yesterday-title" hidden>
+    <button
+      type="button"
+      id="close-popup"
+      class="close-popup"
+      onclick="document.getElementById('yesterday-results').hidden = true; document.getElementById('popup-overlay').hidden = true;"
+      aria-label="close results"
+    >
+      &times;
+    </button>
+
+    <h2 id="yesterday-title">yesterday's results</h2>
+    <p id="yesterday-start"></p>
+    <div id="yesterday-ladder"></div>
+    <p id="yesterday-moves"></p>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
